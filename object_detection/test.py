@@ -1,43 +1,22 @@
-# coding: utf-8
-# # Object Detection Demo
-# License: Apache License 2.0 (https://github.com/tensorflow/models/blob/master/LICENSE)
-# source: https://github.com/tensorflow/models
 import numpy as np
 import os
-import six.moves.urllib as urllib
 import sys
-import tarfile
 import tensorflow as tf
-import zipfile
 import time
 import json
-
-
-
-from collections import defaultdict
-from io import StringIO
-from matplotlib import pyplot as plt
-from PIL import Image
-
-
-
-
-# get frames from images
 import cv2
+
+
+
+
 
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
-
-
-
-
 # ## Object detection imports
 # Here are the imports from the object detection module.
 
 from utils import label_map_util
 from utils import visualization_utils as vis_util
-
-
 
 # for elapse time
 init_start_time = time.time()
@@ -45,33 +24,27 @@ init_start_time = time.time()
 
 
 # directory where videos are being stored
-WORKING_DIR = 'test/'
-
-
-
-
+WORKING_DIR = 'real/'
 
 for input_vid in os.listdir(WORKING_DIR):
 
 
 
     extension = input_vid[-3:].lower()
+
+    # only types of mp4, mov and avi can be proccessed.
     if extension == 'mp4' or extension == 'mov' or extension == 'avi':
 
-
-
-
-
-        print("________________" + str(input_vid) + "________________")
-
-
+        print(str(input_vid))
 
 
         # Creates directory for output files
         directory = 'output/' + str(input_vid) + '/frames/'
+
+
         if not os.path.exists(directory):
             os.makedirs(directory)
-
+            os.makedirs(directory+ "logs/")
 
 
         # Get video from input
@@ -85,7 +58,7 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
 
-        # # Model preparation
+        # # MODEL PREPERARTION ----
 
 
         # What model to download.
@@ -96,20 +69,17 @@ for input_vid in os.listdir(WORKING_DIR):
 
         # Path to frozen detection graph. This is the actual model that is used for the object detection.
         PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
-
+        #
         # List of the strings that is used to add correct label for each box.
         PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
         NUM_CLASSES = 90
 
 
 
-
-
-
         # # ## Download Model
 
-        #   commented out because already downloaded
-
+          # commented out because already downloaded
+        #
         # opener = urllib.request.URLopener()
         # opener.retrieve(DOWNLOAD_BASE + MODEL_FILE, MODEL_FILE)
         # tar_file = tarfile.open(MODEL_FILE)
@@ -117,7 +87,7 @@ for input_vid in os.listdir(WORKING_DIR):
         #   file_name = os.path.basename(file.name)
         #   if 'frozen_inference_graph.pb' in file_name:
         #     tar_file.extract(file, os.getcwd())
-
+        #
 
 
         # ## Load a (frozen) Tensorflow model into memory.
@@ -141,19 +111,40 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
 
+        def get_objectname(index):
+            return {
+                1:"person",
+                2:"bicycle",
+                3:"car",
+                6:"bus",
+                8:"truck",
+                18: "dog",
+                19: "horse",
+                20: "sheep",
+                21: "cow"
+            }[index]
 
-
-        # HELPER CODE - used to change image into array of numbers for numpy
-        def load_image_into_numpy_array(image):
-            (im_width, im_height) = image.size
-            return np.array(image.getdata()).reshape(
-                (im_height, im_width, 3)).astype(np.uint8)
-
-
-
-
-
-
+        def display_load(prog):
+            if (prog < 10):
+                return "[**..................]"
+            elif(prog < 20):
+                return "[****................]"
+            elif (prog < 30):
+                return "[******..............]"
+            elif (prog < 40):
+                return "[********............]"
+            elif (prog < 50):
+                return "[**********..........]"
+            elif (prog < 60):
+                return "[************........]"
+            elif (prog < 70):
+                return "[**************......]"
+            elif (prog < 80):
+                return "[****************....]"
+            elif (prog < 90):
+                return "[******************..]"
+            elif (prog < 100):
+                return "[********************]"
 
 
         # Size, in inches, of the output images.
@@ -169,19 +160,6 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
         # frame array init
-        frame_array=[]
-
-
-        video_pyton = {
-            "name":input_vid,
-            "frame_array":[None],
-            "number_of_frames":video_frame_length
-
-        }
-
-        video_json = json.loads(json.dumps(video_pyton))
-
-
 
 
 
@@ -203,12 +181,17 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     # gets the image from input video
                     ret, image_np = cap.read()
+
+
                     # changes image size
 
                     image_np = cv2.resize(image_np, (800, 450))
 
 
                     object_array=[]
+
+                    frame_json = ''
+                    frame_pyton=''
 
 
 
@@ -262,23 +245,31 @@ for input_vid in os.listdir(WORKING_DIR):
                     object_json =""
 
 
+                    object_count =0
 
                     # iterate through the objects detected in the frame
                     for i, b in enumerate(boxes[0]):
 
-                        #                  car                    bus                  truck               person
-                        if classes[0][i] == 3 or classes[0][i] == 6 or classes[0][i] == 8:
+
+                        #                  car                    bus                  truck               person                  dog                   horse                  sheep                   cow                   bycycle
+                        if classes[0][i] == 3 or classes[0][i] == 6 or classes[0][i] == 8 or classes[0][i] == 1 or classes[0][i] == 18 or classes[0][i] == 19 or classes[0][i] == 20 or classes[0][i] == 21 or classes[0][i] == 2:
+                            object_count +=1
+                            print(object_count)
                             if scores[0][i] >= 0.5:
+
+
 
                                 # get the center of the boxes found
                                 mid_x = (boxes[0][i][1] + boxes[0][i][3]) / 2
                                 mid_y = (boxes[0][i][0] + boxes[0][i][2]) / 2
+
                                 apx_distance = round(((1 - (boxes[0][i][3] - boxes[0][i][1])) ** 4), 1)
 
 
                                 # get the area of the box
                                 box_area = round((((boxes[0][i][1] + boxes[0][i][3]) * 100) * (
                                         (boxes[0][i][0] + boxes[0][i][2]) * 100)) / 100,2)
+
 
                                 # Fill out python object for object
                                 object_python = {
@@ -298,23 +289,17 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
                                 # Switches object name out for correct object
-                                if classes[0][i] == 3:
-                                    object_json["object"] = "car"
-                                elif (classes[0][i] == 6):
-                                    object_json["object"] = "bus"
-                                else:
-                                   object_json["object"] = "truck"
 
+
+                                object_json['object'] = get_objectname(classes[0][i])
 
                                 # puts a distance on the box on the frame
-                                cv2.putText(image_np, '{}'.format(apx_distance), (int(mid_x * 800), int(mid_y * 450)),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                cv2.putText(image_np, '{}'.format(apx_distance), (int(mid_x * 800), int(mid_y * 450)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
                                 # puts a warning message on the frame
-                                if apx_distance <= 0.5:
+                                if apx_distance <= 0.6:
                                     if mid_x > 0.1 and mid_x < 0.7:
-                                        cv2.putText(image_np, 'WARNING!!!', (200,200), cv2.FONT_HERSHEY_SIMPLEX, 3.0,
-                                                    (50, 50, 255), 10)
+                                        cv2.putText(image_np, 'WARNING!!!', (200,200), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (50, 50, 255), 10)
                                        # changes warning to True
                                         warning_detected = True
 
@@ -326,8 +311,6 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     else:
                         frame_json['warning_detected'] = 0
-
-
 
                     # gets the start and finish of every object detected for the CSV file
                     if warning_detected != legacy_warning_detected:
@@ -341,19 +324,21 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     # adds all objects to JSON array
                     frame_json["object_array"] = object_array
+
+
                     # Writes the JSON file
 
-
-                    #JSON_FILE.write(str(frame_json)+',')
-                    frame_array.append(frame_json)
-
+                    JSON_FILE.write(str(frame_json) +"\n")
 
 
                     # Saves the new Image with overlays
+
                     cv2.imwrite(directory + str(frame) + '.png', image_np)
                     output_video.write(image_np)
 
-                    # CAN DISPLAY IMAGE IF REQUIREkD
+
+
+                    # CAN DISPLAY IMAGE IF REQUIRED
                     # cv2.imshow('window',cv2.resize(image_np,(800,450)))
 
 
@@ -372,17 +357,13 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
                     # only displays the progession every X times in this case its 5.
-                    if frame % 100 == 0:
-                        print("FRAME: " + str(frame) + " PROGRESS: " + str(
-                            round_progress) + " AVERAGE FPS: " + str(
-                            round(execution_time, 3)) + " ELAPSED TIME: " + str(
-                            round(time.time() - init_start_time)))
+                    if frame % 10 == 0:
+                        print(display_load(round_progress) + " @ " + str(
+                            round(execution_time, 3)))
 
-                video_json['frame_array'] = frame_array
-                JSON_FILE.write(str(video_json))
+                JSON_FILE.close()
 
                 # closes both files and releases memory
-                JSON_FILE.close()
                 CSV_FILE.close()
 
                 cv2.destroyAllWindows()
