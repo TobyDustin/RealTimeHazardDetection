@@ -5,7 +5,7 @@ import tensorflow as tf
 import time
 import json
 import cv2
-
+import pymongo
 
 
 
@@ -22,9 +22,19 @@ from utils import visualization_utils as vis_util
 init_start_time = time.time()
 
 
+# MONGO Private Key: 69886c33-6cba-4ad0-bc2e-09bbcd3eb28f
+
+client = pymongo.MongoClient('mongodb+srv://tobyd:root@fmp-o7ona.gcp.mongodb.net/test?retryWrites=true')
+
+
+
+
+db = client['FMP-JSON']
+videoMongoConnection = db['Videos']
+
 
 # directory where videos are being stored
-WORKING_DIR = 'real/'
+WORKING_DIR = 'jeb/'
 
 for input_vid in os.listdir(WORKING_DIR):
 
@@ -158,6 +168,13 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
 
+        frame_array = []
+        video_json = {
+            "video":input_vid,
+            "frame_count":"",
+            'frames':[None]
+        }
+
 
         # frame array init
 
@@ -231,13 +248,21 @@ for input_vid in os.listdir(WORKING_DIR):
                     warning_detected = False
 
 
+
+
                    # declare a frame object
                     frame_pyton = {
+                        "frame": frame,
                         "url": "output/"+str(input_vid)+"/frames/"+str(frame)+".png",
                         "object_array": [None],
-                        "warning_detected": 0
+                        "object_count": 0,
+                        "warning_detected":0,
+                        "frame_rate":0,
+
 
                     }
+
+
                     # Change python object into JSON
                     frame_json = json.loads(json.dumps(frame_pyton))
 
@@ -245,16 +270,15 @@ for input_vid in os.listdir(WORKING_DIR):
                     object_json =""
 
 
-                    object_count =0
-
+                    obj_count =0
                     # iterate through the objects detected in the frame
                     for i, b in enumerate(boxes[0]):
 
 
                         #                  car                    bus                  truck               person                  dog                   horse                  sheep                   cow                   bycycle
                         if classes[0][i] == 3 or classes[0][i] == 6 or classes[0][i] == 8 or classes[0][i] == 1 or classes[0][i] == 18 or classes[0][i] == 19 or classes[0][i] == 20 or classes[0][i] == 21 or classes[0][i] == 2:
-                            object_count +=1
-                            print(object_count)
+
+
                             if scores[0][i] >= 0.5:
 
 
@@ -292,6 +316,7 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
                                 object_json['object'] = get_objectname(classes[0][i])
+                                obj_count+=1
 
                                 # puts a distance on the box on the frame
                                 cv2.putText(image_np, '{}'.format(apx_distance), (int(mid_x * 800), int(mid_y * 450)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
@@ -324,11 +349,18 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     # adds all objects to JSON array
                     frame_json["object_array"] = object_array
+                    frame_json["object_count"]=obj_count
 
 
                     # Writes the JSON file
 
-                    JSON_FILE.write(str(frame_json) +"\n")
+
+
+
+                    # JSON_FILE.write(str(frame_json) +"\n")
+
+
+
 
 
                     # Saves the new Image with overlays
@@ -354,14 +386,24 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     # FPS calculation
                     execution_time = round(1 / (end_time - start_time), 2)
+                    frame_json["frame_rate"]= execution_time
 
 
+                    frame_array.append(frame_json)
                     # only displays the progession every X times in this case its 5.
                     if frame % 10 == 0:
                         print(display_load(round_progress) + " @ " + str(
                             round(execution_time, 3)))
 
+                video_json['frames'] = frame_array
+                video_json['frame_count'] = video_frame_length
+
+
                 JSON_FILE.close()
+
+                x = videoMongoConnection.insert_one(video_json)
+                print(x.inserted_id)
+
 
                 # closes both files and releases memory
                 CSV_FILE.close()
