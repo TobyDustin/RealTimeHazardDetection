@@ -6,8 +6,7 @@ import time
 import json
 import cv2
 import pymongo
-
-
+import psutil
 
 
 # This is needed since the notebook is stored in the object_detection folder.
@@ -34,7 +33,11 @@ videoMongoConnection = db['Videos']
 
 
 # directory where videos are being stored
-WORKING_DIR = 'jeb/'
+WORKING_DIR = 'test/'
+
+
+
+
 
 for input_vid in os.listdir(WORKING_DIR):
 
@@ -133,7 +136,6 @@ for input_vid in os.listdir(WORKING_DIR):
                 20: "sheep",
                 21: "cow"
             }[index]
-
         def display_load(prog):
             if (prog < 10):
                 return "[**..................]"
@@ -155,6 +157,8 @@ for input_vid in os.listdir(WORKING_DIR):
                 return "[******************..]"
             elif (prog < 100):
                 return "[********************]"
+        def bytes_to_gb(m):
+            return round(((m / 1024) / 1024) / 1024, 2)
 
 
         # Size, in inches, of the output images.
@@ -185,7 +189,7 @@ for input_vid in os.listdir(WORKING_DIR):
             with tf.Session(graph=detection_graph) as sess:
 
                 # setup video output stream
-                output_video = cv2.VideoWriter('output/' + str(input_vid) + "/output.avi",cv2.VideoWriter_fourcc(*"MJPG"), 30,(800,450))
+                # output_video = cv2.VideoWriter('output/' + str(input_vid) + "/output.avi",cv2.VideoWriter_fourcc(*"MJPG"), 30,(800,450))
 
                 # whilst in the session, iterate through all frames
                 for frame in range(1, video_frame_length):
@@ -250,6 +254,8 @@ for input_vid in os.listdir(WORKING_DIR):
 
 
 
+                    memory_calculation = dict(psutil.virtual_memory()._asdict())
+
                    # declare a frame object
                     frame_pyton = {
                         "frame": frame,
@@ -257,14 +263,22 @@ for input_vid in os.listdir(WORKING_DIR):
                         "object_array": [None],
                         "object_count": 0,
                         "warning_detected":0,
-                        "frame_rate":0,
-
-
+                        "proccess":[None]
                     }
+                    proccess_python = {
+                        "frame_rate":0,
+                        "system_time": time.time(),
+                        "cpu_usage_percent": 0,
+                        "memory_usage_percent": memory_calculation['percent'],
+                        "memory_free": memory_calculation['free'],
+                        "memory_usage": memory_calculation['used']
+                    }
+
 
 
                     # Change python object into JSON
                     frame_json = json.loads(json.dumps(frame_pyton))
+                    proccess_json = json.loads(json.dumps(proccess_python))
 
                     # init declaration for later
                     object_json =""
@@ -348,37 +362,13 @@ for input_vid in os.listdir(WORKING_DIR):
                             legacy_warning_detected = warning_detected
 
                     # adds all objects to JSON array
-                    frame_json["object_array"] = object_array
-                    frame_json["object_count"]=obj_count
-
-
-                    # Writes the JSON file
-
-
-
-
-                    # JSON_FILE.write(str(frame_json) +"\n")
-
-
-
 
 
                     # Saves the new Image with overlays
-
+                    image_np = cv2.resize(image_np,(400,225))
                     cv2.imwrite(directory + str(frame) + '.png', image_np)
-                    output_video.write(image_np)
+                    # output_video.write(image_np)
 
-
-
-                    # CAN DISPLAY IMAGE IF REQUIRED
-                    # cv2.imshow('window',cv2.resize(image_np,(800,450)))
-
-
-                    # HELPER CODE - for image display to cancel the proccess.
-
-                    # if cv2.waitKey(25) & 0xFF == ord('q'):
-                    #     cv2.destroyAllWindows()
-                    #     break
 
                     # for FPS calculation
                     end_time = time.time()
@@ -386,8 +376,12 @@ for input_vid in os.listdir(WORKING_DIR):
 
                     # FPS calculation
                     execution_time = round(1 / (end_time - start_time), 2)
-                    frame_json["frame_rate"]= execution_time
+                    proccess_json["frame_rate"]= execution_time
+                    proccess_json["cpu_usage_percent"]= psutil.cpu_percent(interval=0.02)
 
+                    frame_json["object_array"] = object_array
+                    frame_json["object_count"] = obj_count
+                    frame_json["proccess"] = proccess_json
 
                     frame_array.append(frame_json)
                     # only displays the progession every X times in this case its 5.
@@ -397,6 +391,7 @@ for input_vid in os.listdir(WORKING_DIR):
 
                 video_json['frames'] = frame_array
                 video_json['frame_count'] = video_frame_length
+
 
 
                 JSON_FILE.close()
